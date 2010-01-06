@@ -1,7 +1,10 @@
 require 'rubygems'
 require 'datacatalog'
 
-THRESHOLD = 100 * 1024 * 1024 # 100 MB
+LIMIT = {
+  :human => "100 MB",
+  :bytes => 100 * 1024 * 1024
+}
 
 def setup
   config = YAML.load_file("config.yml")
@@ -10,26 +13,28 @@ def setup
 end
 
 def calculate(verbose=false)
-  puts "Fetching sources from API..."
+  puts "Fetching downloads from API..."
   downloads = DataCatalog::Download.all
 
-  puts "Selecting downloads with size < #{THRESHOLD}..."
-  matches = downloads.select do |download|
-    if download.format == "xml"
-      bytes = download['size']['bytes']
-      bytes && bytes < THRESHOLD
-    end
+  puts "Analyzing downloads..."
+  csv_downloads = downloads.select do |download|
+    download.format == "csv"
+  end
+  
+  small_csv_downloads = csv_downloads.select do |download|
+    bytes = download['size']['bytes']
+    bytes && bytes < LIMIT[:bytes]
   end
 
-  puts "\nFound #{matches.length} downloads"
+  puts "\nSummary:"
+  summarize(downloads, downloads, "downloads")
+  summarize(csv_downloads, downloads, "CSV downloads")
+  summarize(small_csv_downloads, downloads, "CSV downloads < #{LIMIT[:human]}")
+end
 
-  if verbose
-    puts "\n%-24s %-10s %s" % ["source_id", "bytes", "label"]
-    matches.each do |match|
-      puts "%-24s %10i %4i %s" % [match.source_id, match['size']['bytes'],
-        match['size'].number, match['size'].unit]
-    end
-  end
+def summarize(count, total, text)
+  puts "  %*i (%5.1f %%) %s" %
+    [total.length.to_s.length, count.length, count.length * 100.0 / total.length, text]
 end
 
 setup
